@@ -32,6 +32,9 @@ namespace hawk_camera
     std::unique_ptr<libcamera::Request> m_request;
     bool m_autoRestartFlag;
 
+    libcamera::Rectangle m_scalerCrop;
+    bool m_scalerCropChanged;
+
     std::vector<std::shared_ptr<FrameProcessingInterface>> m_processors;
     std::mutex m_procMutex;
 

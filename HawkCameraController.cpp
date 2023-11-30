@@ -5,7 +5,7 @@
 namespace hawk_camera
 {
 
-    HawkCameraController::HawkCameraController(const libcamera::PixelFormat &format, uint32_t width, uint32_t height)
+    HawkCameraController::HawkCameraController(const libcamera::PixelFormat &format, uint32_t width, uint32_t height) : m_scalerCropChanged(false)
     {
         m_cm.start();
 
@@ -84,7 +84,6 @@ namespace hawk_camera
 
         m_camera->requestCompleted.connect(this, &HawkCameraController::OnRequestComplete);
         m_camera->start();
-        SetViewPort(0, 0, k_matrixWidth, k_matrixHeight);
     }
 
     HawkCameraController::~HawkCameraController()
@@ -126,40 +125,35 @@ namespace hawk_camera
     void HawkCameraController::SetViewPort(uint32_t center_X, uint32_t center_Y, uint32_t width, uint32_t height)
     {
         libcamera::ControlList &controls = m_request->controls();
-        const libcamera::Rectangle scalerCrop(center_X, center_Y, width, height);
+        libcamera::Rectangle scalerCrop(center_X, center_Y, width, height);
         if (CheckViewPort(scalerCrop))
         {
-            controls.set(libcamera::controls::ScalerCrop, scalerCrop);
+            m_scalerCrop = scalerCrop;
+            m_scalerCropChanged = true;
         }
     }
 
     void HawkCameraController::SetViewPortOrigin(uint32_t center_X, uint32_t center_Y)
     {
-        libcamera::ControlList &controls = m_request->controls();
-        auto control = controls.get(libcamera::controls::ScalerCrop);
-        if (!control.has_value())
-            return;
-        auto scalerCrop = control.value();
-        scalerCrop.x = center_X - scalerCrop.width / 2;
-        scalerCrop.y = center_Y - scalerCrop.height / 2;
-        if (CheckViewPort(scalerCrop))
+        auto newScalerCrop = m_scalerCrop;
+        newScalerCrop.x = center_X - m_scalerCrop.width / 2;
+        newScalerCrop.y = center_Y - m_scalerCrop.height / 2;
+        if (CheckViewPort(newScalerCrop))
         {
-            controls.set(libcamera::controls::ScalerCrop, scalerCrop);
+            m_scalerCrop = newScalerCrop;
+            m_scalerCropChanged = true;
         }
     }
 
     void HawkCameraController::SetViewPortSize(uint32_t width, uint32_t height)
     {
-        libcamera::ControlList &controls = m_request->controls();
-        auto control = controls.get(libcamera::controls::ScalerCrop);
-        if (!control.has_value())
-            return;
-        auto scalerCrop = control.value();
-        scalerCrop.width = width;
-        scalerCrop.height = height;
-        if (CheckViewPort(scalerCrop))
+        auto newScalerCrop = m_scalerCrop;
+        newScalerCrop.width = width;
+        newScalerCrop.height = height;
+        if (CheckViewPort(newScalerCrop))
         {
-            controls.set(libcamera::controls::ScalerCrop, scalerCrop);
+            m_scalerCrop = newScalerCrop;
+            m_scalerCropChanged = true;
         }
     }
 
@@ -189,8 +183,8 @@ namespace hawk_camera
             const auto stride = cfg.stride;
             const auto pixelFormat = cfg.pixelFormat;
 
-            Log() << " size " << width << "x" << height << " stride " << stride << " format " << cfg.pixelFormat.toString() << " sec "
-                  << (double)clock() / CLOCKS_PER_SEC << std::endl;
+            // Log() << " size " << width << "x" << height << " stride " << stride << " format " << cfg.pixelFormat.toString() << " sec "
+            //       << (double)clock() / CLOCKS_PER_SEC << std::endl;
 
             if (buffer->planes().size() > 0)
             {
@@ -217,6 +211,12 @@ namespace hawk_camera
             if (m_autoRestartFlag)
             {
                 request->reuse(libcamera::Request::ReuseBuffers);
+                if (m_scalerCropChanged)
+                {
+                    libcamera::ControlList &controls = m_request->controls();
+                    controls.set(libcamera::controls::ScalerCrop, m_scalerCrop);
+                    m_scalerCropChanged = false;
+                }
                 m_camera->queueRequest(request);
             }
         }
