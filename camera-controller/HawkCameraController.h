@@ -24,6 +24,9 @@ namespace hawk_camera
 
     void AddProcessor(std::shared_ptr<FrameProcessingInterface> proc);
 
+    static constexpr size_t k_matrixWidth = 9152;
+    static constexpr size_t k_matrixHeight = 6944;
+
   private:
     libcamera::CameraManager m_cm;
     std::shared_ptr<libcamera::Camera> m_camera;
@@ -37,14 +40,15 @@ namespace hawk_camera
 
     std::vector<std::shared_ptr<FrameProcessingInterface>> m_processors;
     std::mutex m_procMutex;
+    std::mutex m_startRequestFence;
 
     void OnRequestComplete(libcamera::Request *request);
     void SetDefaultControls();
     static bool CheckViewPort(const libcamera::Rectangle &rect);
-    std::ostream &Log() const { return std::cout; }
 
-    static constexpr size_t k_matrixWidth = 9152;
-    static constexpr size_t k_matrixHeight = 6944;
+    void ValidateScalerCrop();
+
+    std::ostream &Log() const { return std::cout; }
   };
 
 } // hawk_camera

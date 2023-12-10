@@ -103,9 +103,10 @@ namespace hawk_camera
 
     void HawkCameraController::Start(bool autoRestartFlag)
     {
+        std::lock_guard<std::mutex> fence{m_startRequestFence};
         m_autoRestartFlag = autoRestartFlag;
+        ValidateScalerCrop();
         m_camera->queueRequest(m_request.get());
-        m_autoRestartFlag = true;
     }
 
     void HawkCameraController::SetDefaultControls()
@@ -172,19 +173,18 @@ namespace hawk_camera
     void HawkCameraController::OnRequestComplete(libcamera::Request *request)
     {
         if (request->status() == libcamera::Request::RequestCancelled)
+        {
             return;
+        }
 
-        const libcamera::Request::BufferMap &buffers = request->buffers();
+        std::lock_guard<std::mutex> fence{m_startRequestFence};
+        const libcamera::Request::BufferMap &buffers = m_request->buffers();
         for (auto &[stream, buffer] : buffers)
         {
             const auto &cfg = stream->configuration();
             const auto width = cfg.size.width;
             const auto height = cfg.size.height;
             const auto stride = cfg.stride;
-            const auto pixelFormat = cfg.pixelFormat;
-
-            // Log() << " size " << width << "x" << height << " stride " << stride << " format " << cfg.pixelFormat.toString() << " sec "
-            //       << (double)clock() / CLOCKS_PER_SEC << std::endl;
 
             if (buffer->planes().size() > 0)
             {
@@ -204,21 +204,27 @@ namespace hawk_camera
                 }
             }
 
-            // libcamera::ControlList &controls = request->controls();
+            // libcamera::ControlList &controls = m_request->controls();
             // auto lens = controls.get(libcamera::controls::FocusFoM);
             // auto pos = lens.value();
 
+            m_request->reuse(libcamera::Request::ReuseBuffers);
+
             if (m_autoRestartFlag)
             {
-                request->reuse(libcamera::Request::ReuseBuffers);
-                if (m_scalerCropChanged)
-                {
-                    libcamera::ControlList &controls = m_request->controls();
-                    controls.set(libcamera::controls::ScalerCrop, m_scalerCrop);
-                    m_scalerCropChanged = false;
-                }
-                m_camera->queueRequest(request);
+                ValidateScalerCrop();
+                m_camera->queueRequest(m_request.get());
             }
+        }
+    }
+
+    void HawkCameraController::ValidateScalerCrop()
+    {
+        if (m_scalerCropChanged)
+        {
+            libcamera::ControlList &controls = m_request->controls();
+            controls.set(libcamera::controls::ScalerCrop, m_scalerCrop);
+            m_scalerCropChanged = false;
         }
     }
 
