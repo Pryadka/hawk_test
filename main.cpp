@@ -116,10 +116,9 @@ int main()
 			{
 			case Keys::Enter:
 				saveImages(camController, videoProcessor);
-				camController.SetViewPortSize(hawk_camera::HawkCameraController::k_matrixWidth,
-											  hawk_camera::HawkCameraController::k_matrixHeight); // half of the matric
-				camController.SetViewPortOrigin(hawk_camera::HawkCameraController::k_matrixWidth / 2,
-												hawk_camera::HawkCameraController::k_matrixHeight / 2); // center of the matrix
+				camController.SetViewPort(0, 0,
+										  hawk_camera::HawkCameraController::k_matrixWidth,
+										  hawk_camera::HawkCameraController::k_matrixHeight);
 				camController.Start(false);
 				break;
 			default:
